@@ -9,22 +9,75 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+## 首先加载包，并且加载上一步骤的数据
+```{r}
+library(randomForest)
+library(ROCR)
+require(Hmisc)
+load(file=RF_model_file)
 ```
 
-## Including Plots
+## 把test数据集准备成随机森林模型预测需要的input格式
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+predictor_data=t(rawdata[,4:length(header)])
+predictor_names=as.vector((rawdata[,3])) #gene symbol
+colnames(predictor_data)=predictor_names
+RF_predictor_names=rownames(rf_output$importance)
+predictor_data=predictor_data[,RF_predictor_names]
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## 应用随机森林模型来进行预测
+```{r}
+RF_predictions_responses=predict(rf_output, predictor_data, type="response")
+RF_predictions_votes=predict(rf_output, predictor_data, type="vote")
+```
+
+
+## 预测结果的一些评价指标
+
+### 首先要把预测结果与test数据的真实临床表型数据结合起来
+```{r}
+clindata_plusRF=cbind(clindata,RF_predictions_responses,RF_predictions_votes)
+clindata_plusRF=clindata_plusRF[which(!is.na(clindata_plusRF[,"event.rfs"])),]
+
+```
+
+### 
+
+```{r}
+confusion=table(clindata_plusRF[,c("event.rfs","RF_predictions_responses")])
+rownames(confusion)=c("NoRelapse","Relapse")
+sensitivity=(confusion[2,2]/(confusion[2,2]+confusion[2,1]))*100
+specificity=(confusion[1,1]/(confusion[1,1]+confusion[1,2]))*100
+overall_error=((confusion[1,2]+confusion[2,1])/sum(confusion))*100
+overall_accuracy=((confusion[1,1]+confusion[2,2])/sum(confusion))*100
+class1_error=confusion[1,2]/(confusion[1,1]+confusion[1,2])
+class2_error=confusion[2,1]/(confusion[2,2]+confusion[2,1])
+```
+
+### ROC curve and calculate the area under it (AUC)
+```{r}
+# Create variables for the known target class and predicted class probabilities.
+target=clindata_plusRF[,"event.rfs"]
+target[target==1]="Relapse"
+target[target==0]="NoRelapse"
+relapse_scores=clindata_plusRF[,"Relapse"]
+# First calculate the AUC value.
+pred=prediction(relapse_scores,target)
+perf_AUC=performance(pred,"auc")
+AUC=perf_AUC@y.values[[1]]
+AUC_out=paste("AUC=",AUC,sep="")
+# Then, plot the actual ROC curve.
+perf_ROC=performance(pred,"tpr","fpr")
+plot(perf_ROC, main="ROC plot")
+text(0.5,0.5,paste("AUC = ",format(AUC, digits=5, scientific=FALSE)))
+```
+
+
+
+
+
+
+

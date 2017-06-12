@@ -1,17 +1,6 @@
----
-title: "randomForest"
-author: "jmzeng@163.com"
-date: "6/12/2017"
-output: 
-  html_document: 
-    toc: yes
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-> * [我的博客](http://www.bio-info-trainee.com/)
+将会分成4讲，来用公共数据一步步入门这个随机森林算法 
+ 
+ * [我的博客](http://www.bio-info-trainee.com/)
  * [我们的论坛](http://www.biotrainee.com/forum.php)
  * [捐赠我](http://www.bio-info-trainee.com/donate)
 
