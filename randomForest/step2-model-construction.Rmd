@@ -1,0 +1,137 @@
+---
+title: "Construct model"
+author: "jmzeng@163.com"
+date: "6/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+> 随机森林算法只需要两个输入文件：
+* 多个变量在多个样本的数据矩阵
+* 每个样本的结果 
+建立好了模型，就可以根据新的样本的多个变量的值来预测该样本的结果了。
+
+##　安装并加载必须的packages
+> 如果你还没有安装，就运行下面的代码安装：
+```{r,eval=FALSE}
+install.packages("randomForest")
+install.packages("ROCR")
+install.packages("Hmisc")
+source("http://bioconductor.org/biocLite.R")
+biocLite("genefilter")
+```
+
+> 如果你安装好了，就直接加载它们即可
+```{r,warning=FALSE,message=FALSE}
+library(randomForest)
+library(ROCR)
+library(genefilter)
+library(Hmisc)
+
+```
+
+##　首先制作多个变量在多个样本的数据矩阵
+
+测试数据里面的表达矩阵目前含有12,030 genes and 286 breast cancer samples，还需要进行进一步的过滤后再作为随机森林算法的input
+
+如果某个探针在样本群体表达差异不大，那么这样的基因对于样本分类的效果微乎其微，是需要过滤掉的。
+这里我们借用genefilter包的filterfun函数来行使过滤功能，过滤的标准有两个，如下所示:
+* (1) At least 20% of samples should have raw intensity greater than 100; 
+* (2) The coefficient of variation (sd/mean) is between 0.7 and 10.
+代码是：
+```{r}
+X=rawdata[,4:length(header)]
+ffun=filterfun(pOverA(p = 0.2, A = 100), cv(a = 0.7, b = 10))
+filt=genefilter(2^X,ffun)
+filt_Data=rawdata[filt,]
+```
+
+这个表达矩阵还需要转置，因为RandomForests包默认输入矩阵的列代表着predictor variables (genes)
+
+## 然后制作样本的结果文件
+
+```{r}
+target= clindata[,"relapse..1.True."]
+target[target==0]="NoRelapse"
+target[target==1]="Relapse"
+target=as.factor(target)
+```
+
+## 最后运行建模
+
+```{r}
+tmp = as.vector(table(target))
+num_classes = length(tmp)
+min_size = tmp[order(tmp,decreasing=FALSE)[1]]
+sampsizes = rep(min_size,num_classes)
+rf_output=randomForest(x=predictor_data, y=target, importance = TRUE, ntree = 10001, proximity=TRUE, sampsize=sampsizes)
+```
+
+上面得到的rf_output就是我们根据训练数据构建好的随机森林模型啦。
+
+# 模型诊断
+> 可以计算 sensitivity, specificity, accuracy 等等
+```{r}
+rf_importances=importance(rf_output, scale=FALSE)
+confusion=rf_output$confusion
+sensitivity=(confusion[2,2]/(confusion[2,2]+confusion[2,1]))*100
+specificity=(confusion[1,1]/(confusion[1,1]+confusion[1,2]))*100
+overall_error=rf_output$err.rate[length(rf_output$err.rate[,1]),1]*100
+overall_accuracy=1-overall_error
+class1_error=paste(rownames(confusion)[1]," error rate= ",confusion[1,3], sep="")
+class2_error=paste(rownames(confusion)[2]," error rate= ",confusion[2,3], sep="")
+overall_accuracy=100-overall_error
+```
+
+### 显示最重要的30个基因
+```{r}
+varImpPlot(rf_output, type=2, n.var=30, scale=FALSE, main="Variable Importance (Gini) for top 30 predictors")
+```
+
+## 显示模型在训练数据的分类效果
+
+```{r}
+target_labels=as.vector(target)
+target_labels[target_labels=="NoRelapse"]="N"
+target_labels[target_labels=="Relapse"]="R"
+MDSplot(rf_output, target, k=2, xlab="", ylab="", pch=target_labels, palette=c("red", "blue"), main="MDS plot")
+```
+
+## create an ROC curve and calculate the area under it (AUC)
+
+```{r}
+predictions=as.vector(rf_output$votes[,2])
+pred=prediction(predictions,target)
+#First calculate the AUC value
+perf_AUC=performance(pred,"auc")
+AUC=perf_AUC@y.values[[1]]
+#Then, plot the actual ROC curve 
+plot(perf_ROC, main="ROC plot")
+text(0.5,0.5,paste("AUC = ",format(AUC, digits=5, scientific=FALSE)))
+```
+
+
+## back-to-back histogram of vote distributions for Relapse and NoRelapse
+```{r}
+options(digits=2) 
+out <- histbackback(split(rf_output$votes[,"Relapse"], target), probability=FALSE, xlim=c(-50,50), main = 'Vote distributions for patients classified by RF', axes=TRUE, ylab="Fraction votes (Relapse)")
+barplot(-out$left, col="red" , horiz=TRUE, space=0, add=TRUE, axes=FALSE)
+barplot(out$right, col="blue", horiz=TRUE, space=0, add=TRUE, axes=FALSE)
+```
+
+## 最后我们看看训练集本身对这个随机森林模型的适应情况
+
+```{r}
+case_predictions=cbind(clindata,target,rf_output$predicted,rf_output$votes)
+head(case_predictions)
+```
+
+

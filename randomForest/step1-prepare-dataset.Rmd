@@ -1,0 +1,46 @@
+---
+title: "Prepare-dataset"
+author: "jmzeng@163.com"
+date: "6/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+
+###　安装并加载必须的packages
+> 如果你还没有安装，就运行下面的代码安装：
+```{r,eval=FALSE}
+source("http://bioconductor.org/biocLite.R")
+biocLite()
+## first software package
+biocLite("GEOquery")
+biocLite("affy")
+biocLite("gcrma")
+## then annotation package
+biocLite("org.Hs.eg.db")
+biocLite("hgu133a.db") 
+```
+
+> 如果你安装好了，就直接加载它们即可
+```{r,warning=FALSE,message=FALSE}
+library(GEOquery)
+library(affy)
+library(gcrma)
+
+```
+
+```{r}
+tmpDir='/Users/jimmy/tmp/ML'
+setwd(tmpDir)
+GSE2034_clindata=getGSEDataTables("GSE2034")[[2]][1:286,]
+```
+
+
+

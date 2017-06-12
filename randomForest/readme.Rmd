@@ -1,0 +1,50 @@
+---
+title: "randomForest"
+author: "jmzeng@163.com"
+date: "6/12/2017"
+output: 
+  html_document: 
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+
+## 背景介绍
+
+## 准备训练数据和测试数据集
+
+> 这里，我们从GEO数据库里面下载两个不同研究的表达芯片数据
+
+### [training data set ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=gse2034)
+
+> GSE2034已经是2005年的数据了，不过资料整理的比较其实，共有180 lymph-node negative relapse free patients 和 106 lymph-node negate patients that developed a distant metastasis.
+
+### [test  data set ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE2990)
+
+> GSE2990是2006年的数据，数据包括:
+
+64 microarray experiments from primary breast tumors used as training set to identify genes differentially expressed in grade 1 and 3.
+
+129 microarray experiments from primary breast tumors of untreated patients used as validation set to validate the list of genes and its correlation with survival.
+
+它们使用的是同一个芯片平台：Affymetrix U133A platform ([GPL96](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL96)).
+
+下载GEO数据库的芯片数据并且处理成表达矩阵是非常简单的，代码见：
+
+接下来
+
+## 用训练数据构建随机森林分类器
+
+## 在测试数据上使用构建好的随机森林分类器
+
+## 用生存分析来查看分类效果
+
+## 结语
+
