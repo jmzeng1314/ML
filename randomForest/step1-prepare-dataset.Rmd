@@ -1,5 +1,5 @@
 ---
-title: "Prepare-dataset"
+title: "R语言实现随机森林(1)Prepare-dataset"
 author: "jmzeng@163.com"
 date: "6/12/2017"
 output: html_document
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
  * [捐赠我](http://www.bio-info-trainee.com/donate)
 
 
-###　安装并加载必须的packages
+##　安装并加载必须的packages
 > 如果你还没有安装，就运行下面的代码安装：
 ```{r,eval=FALSE}
 source("http://bioconductor.org/biocLite.R")
@@ -36,11 +36,108 @@ library(gcrma)
 
 ```
 
-```{r}
-tmpDir='/Users/jimmy/tmp/ML'
-setwd(tmpDir)
-GSE2034_clindata=getGSEDataTables("GSE2034")[[2]][1:286,]
+## 从GEO数据库下载数据
+> 直接利用**GEOquery**包里面的**getGEO**函数下载文章作者制作好的表达矩阵即可，用法如下：
+
+```{r,eval=FALSE}
+GSE2034 <- getGEO('GSE2034', destdir=".",getGPL = F)
+GSE2034[[1]] 
+GSE2990 <- getGEO('GSE2990', destdir=".",getGPL = F)
+GSE2990[[1]]
+save(GSE2034,GSE2990,file = 'ML_RF_GEO.Rdata')
+
 ```
+
+值得一提的是，作者处理芯片数据得到表达矩阵这个步骤不一定准确，但是为了节省篇幅和时间，我就不下载affymetrix的芯片原始数据啦。
+
+## 芯片平台信息
+> 本问用到的两个数据都是同一个芯片平台：Affymetrix U133A platform ([GPL96](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL96)).
+
+```{r,warning=FALSE,message=FALSE} 
+  platformDB='hgu133a.db'
+  library(platformDB, character.only=TRUE) 
+  probe2symbol=toTable(hgu133aSYMBOL)
+  head(probe2symbol)
+  rmDupID <-function(a=matrix(c(1,1:5,2,2:6,2,3:7),ncol=6)){
+    exprSet=a[,-1]
+    rowMeans=apply(exprSet,1,function(x) mean(as.numeric(x),na.rm=T))
+    a=a[order(rowMeans,decreasing=T),]
+    exprSet=a[!duplicated(a[,1]),]
+    #
+    exprSet=exprSet[!is.na(exprSet[,1]),]
+    rownames(exprSet)=exprSet[,1]
+    exprSet=exprSet[,-1]
+    return(exprSet)
+  } 
+  
+
+```
+
+
+## 表达矩阵和临床信息
+> 在R里面统一处理，代码如下：
+
+```{r}
+
+load('ML_RF_GEO.Rdata')
+exprSet=exprs(GSE2034[[1]])
+keep_probe=rownames(exprSet) %in% probe2symbol$probe_id
+exprSet=exprSet[keep_probe,]
+exprSet <- cbind( probe2symbol[match(rownames(exprSet),probe2symbol$probe_id),2],exprSet)
+exprSet <- rmDupID(exprSet)
+rn=rownames(exprSet)
+exprSet=apply(exprSet,2,as.numeric)
+rownames(exprSet)=rn
+exprSet[1:4,1:4]
+exprSet=log2(exprSet) ## based on 2
+#boxplot(exprSet,las=2)
+GSE2034_exprSet=exprSet
+GSE2034_metadata=pData(GSE2034[[1]])
+ 
+training_data=GSE2034_exprSet
+training_clinical=GSE2034_metadata[,c("title","geo_accession","characteristics_ch1")]
+#head(training_clinical)
+dim(training_clinical)
+
+exprSet=exprs(GSE2990[[1]])
+keep_probe=rownames(exprSet) %in% probe2symbol$probe_id
+exprSet=exprSet[keep_probe,]
+exprSet <- cbind( probe2symbol[match(rownames(exprSet),probe2symbol$probe_id),2],exprSet)
+exprSet <- rmDupID(exprSet)
+rn=rownames(exprSet)
+exprSet=apply(exprSet,2,as.numeric)
+rownames(exprSet)=rn
+exprSet[1:4,1:4]
+#exprSet=log2(exprSet) ## based on 2
+#boxplot(exprSet,las=2)
+GSE2990_exprSet=exprSet
+GSE2990_metadata=pData(GSE2990[[1]])
+
+
+testing_data=GSE2990_exprSet
+#head(testing_data)
+dim(testing_data)
+# testing_clinical=GSE2990_metadata 
+# 本来准备用GEO包下载的临床信息，但是好像有缺失，所以用了作者整理的临床数据
+
+testing_clinical=read.table('ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE2nnn/GSE2990/suppl/GSE2990_suppl_info.txt',
+                            header = T,stringsAsFactors = F,sep = '\t')
+tail(testing_clinical)
+
+
+save(training_data,training_clinical,testing_data,testing_clinical,file = 'ML_RF_input.Rdata')
+
+```
+
+**training_data** 是12437个基因在286个样本的表达矩阵
+
+**testing_data** 是12437个基因在189个样本的表达矩阵
+
+**training_clinical** 是训练数据集的286个样本的临床信息
+
+**testing_clinical** 是测试数据集的189个样本的临床信息
+
+这些数据在后面构建随机森林模型就会用得着啦。
 
 
 

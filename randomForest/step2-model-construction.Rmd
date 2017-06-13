@@ -1,5 +1,5 @@
 ---
-title: "Construct model"
+title: "R语言实现随机森林(2)Construct model"
 author: "jmzeng@163.com"
 date: "6/12/2017"
 output: html_document
@@ -14,8 +14,10 @@ knitr::opts_chunk$set(echo = TRUE)
  * [捐赠我](http://www.bio-info-trainee.com/donate)
 
 > 随机森林算法只需要两个输入文件：
+
 * 多个变量在多个样本的数据矩阵
 * 每个样本的结果 
+
 建立好了模型，就可以根据新的样本的多个变量的值来预测该样本的结果了。
 
 ##　安装并加载必须的packages
@@ -37,62 +39,95 @@ library(Hmisc)
 
 ```
 
-##　首先制作多个变量在多个样本的数据矩阵
+##　制作模型的输入矩阵
 
-测试数据里面的表达矩阵目前含有12,030 genes and 286 breast cancer samples，还需要进行进一步的过滤后再作为随机森林算法的input
+> 测试数据集里面的表达矩阵目前含有12,030 genes and 286 breast cancer samples，还需要进行进一步的过滤后再作为随机森林算法的input
 
-如果某个探针在样本群体表达差异不大，那么这样的基因对于样本分类的效果微乎其微，是需要过滤掉的。
-这里我们借用genefilter包的filterfun函数来行使过滤功能，过滤的标准有两个，如下所示:
-* (1) At least 20% of samples should have raw intensity greater than 100; 
-* (2) The coefficient of variation (sd/mean) is between 0.7 and 10.
-代码是：
 ```{r}
-X=rawdata[,4:length(header)]
+load('ML_RF_input.Rdata')
+dim(training_data)
+training_data[1:4,1:4]
+ 
 ffun=filterfun(pOverA(p = 0.2, A = 100), cv(a = 0.7, b = 10))
-filt=genefilter(2^X,ffun)
-filt_Data=rawdata[filt,]
+filt=genefilter(2^training_data,ffun)
+filt_Data=training_data[filt,]
+
+dim(filt_Data)
+filt_Data[1:4,1:4]
+predictor_data=t(filt_Data)
+str(predictor_data)
 ```
 
-这个表达矩阵还需要转置，因为RandomForests包默认输入矩阵的列代表着predictor variables (genes)
+> 如上所示，如果某个探针在样本群体表达差异不大，那么这样的基因对于样本分类的效果微乎其微，是需要过滤掉的。
+
+这里我们借用genefilter包的filterfun函数来行使过滤功能，过滤的标准有两个，如下所示:
+
+* (1) At least 20% of samples should have raw intensity greater than 100; 
+* (2) The coefficient of variation (sd/mean) is between 0.7 and 10.
+
+当然，这个表达矩阵还需要转置，因为RandomForests包默认输入矩阵的列代表着predictor variables (genes)
+
+可以看到，最后只挑选了1916个基因拿去做随机森林模型构建。
 
 ## 然后制作样本的结果文件
+> 随机森林模型就是根据一大堆的特征来对样本进行判别，所以训练的时候，首先样本要有特征值，在我们这个例子里面，就是每个样本的每个基因的表达量，但是还需要知道样本的本身的情况，在这里用是否癌症复发与否作为样本的状态值，供随机森林模型训练。
 
 ```{r}
-target= clindata[,"relapse..1.True."]
+head(training_clinical)
+table(as.character(training_clinical$characteristics_ch1))
+## 根据信息匹配该癌症样本是否复发
+target=as.numeric(sapply(as.character(training_clinical$characteristics_ch1),function(x) strsplit(x,':')[[1]][2]))
+
 target[target==0]="NoRelapse"
 target[target==1]="Relapse"
 target=as.factor(target)
+head(target)
 ```
 
 ## 最后运行建模
-
+先设置建模的一些参数
 ```{r}
 tmp = as.vector(table(target))
 num_classes = length(tmp)
 min_size = tmp[order(tmp,decreasing=FALSE)[1]]
 sampsizes = rep(min_size,num_classes)
+```
+然后直接运行randomForest包里面的randomForest函数即可，非常简单
+```{r,eval=FALSE}
 rf_output=randomForest(x=predictor_data, y=target, importance = TRUE, ntree = 10001, proximity=TRUE, sampsize=sampsizes)
+save(rf_output,file='rf_output.Rdata')
 ```
 
-上面得到的rf_output就是我们根据训练数据构建好的随机森林模型啦。
+上面得到的**rf_output**就是我们根据训练数据构建好的随机森林模型啦。
+
+> **rf_output** 是一个非常复杂的对象，里面含有18个元素，下面的模型诊断会用到其中一些。
 
 # 模型诊断
 > 可以计算 sensitivity, specificity, accuracy 等等
 ```{r}
+load('rf_output.Rdata')
 rf_importances=importance(rf_output, scale=FALSE)
+head(rf_importances)
 confusion=rf_output$confusion
+confusion
 sensitivity=(confusion[2,2]/(confusion[2,2]+confusion[2,1]))*100
+sensitivity
 specificity=(confusion[1,1]/(confusion[1,1]+confusion[1,2]))*100
+specificity
 overall_error=rf_output$err.rate[length(rf_output$err.rate[,1]),1]*100
-overall_accuracy=1-overall_error
+overall_error
 class1_error=paste(rownames(confusion)[1]," error rate= ",confusion[1,3], sep="")
+class1_error
 class2_error=paste(rownames(confusion)[2]," error rate= ",confusion[2,3], sep="")
+class2_error
 overall_accuracy=100-overall_error
+overall_accuracy
+
 ```
 
 ### 显示最重要的30个基因
 ```{r}
-varImpPlot(rf_output, type=2, n.var=30, scale=FALSE, main="Variable Importance (Gini) for top 30 predictors")
+varImpPlot(rf_output, type=2, n.var=30, scale=FALSE, main="Variable Importance (Gini) for top 30 predictors",cex =.7)
 ```
 
 ## 显示模型在训练数据的分类效果
@@ -113,12 +148,14 @@ pred=prediction(predictions,target)
 perf_AUC=performance(pred,"auc")
 AUC=perf_AUC@y.values[[1]]
 #Then, plot the actual ROC curve 
+perf_ROC=performance(pred,"tpr","fpr")
 plot(perf_ROC, main="ROC plot")
 text(0.5,0.5,paste("AUC = ",format(AUC, digits=5, scientific=FALSE)))
 ```
 
 
 ## back-to-back histogram of vote distributions for Relapse and NoRelapse
+
 ```{r}
 options(digits=2) 
 out <- histbackback(split(rf_output$votes[,"Relapse"], target), probability=FALSE, xlim=c(-50,50), main = 'Vote distributions for patients classified by RF', axes=TRUE, ylab="Fraction votes (Relapse)")
@@ -129,8 +166,15 @@ barplot(out$right, col="blue", horiz=TRUE, space=0, add=TRUE, axes=FALSE)
 ## 最后我们看看训练集本身对这个随机森林模型的适应情况
 
 ```{r}
-case_predictions=cbind(clindata,target,rf_output$predicted,rf_output$votes)
+case_predictions=cbind(training_clinical,target,rf_output$predicted,rf_output$votes)
 head(case_predictions)
+table(case_predictions[,4:5])
 ```
+
+可以看到模型对癌症不复发的情况预测的挺不错的(184正确，33错误)，但是对癌症复发的情况预测很糟糕(27对，42错)。
+
+
+
+
 
 

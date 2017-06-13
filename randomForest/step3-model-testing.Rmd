@@ -1,5 +1,5 @@
 ---
-title: "Test the model"
+title: "R语言实现随机森林(3)Test the model"
 author: "jmzeng@163.com"
 date: "6/12/2017"
 output: html_document
@@ -10,21 +10,25 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## 首先加载包，并且加载上一步骤的数据
-```{r}
+```{r,warning=FALSE,message=FALSE}
 library(randomForest)
 library(ROCR)
 require(Hmisc)
-load(file=RF_model_file)
+load('rf_output.Rdata')
+load('ML_RF_input.Rdata')
+
 ```
 
 ## 把test数据集准备成随机森林模型预测需要的input格式
 
 ```{r}
-predictor_data=t(rawdata[,4:length(header)])
-predictor_names=as.vector((rawdata[,3])) #gene symbol
-colnames(predictor_data)=predictor_names
+predictor_data=t(testing_data)
+predictor_data[1:4,1:4]
+dim(predictor_data)
 RF_predictor_names=rownames(rf_output$importance)
 predictor_data=predictor_data[,RF_predictor_names]
+predictor_data[1:4,1:4]
+dim(predictor_data)
 ```
 
 
@@ -32,32 +36,51 @@ predictor_data=predictor_data[,RF_predictor_names]
 ```{r}
 RF_predictions_responses=predict(rf_output, predictor_data, type="response")
 RF_predictions_votes=predict(rf_output, predictor_data, type="vote")
+head(RF_predictions_responses)
+head(RF_predictions_votes)
 ```
 
 
 ## 预测结果的一些评价指标
 
 ### 首先要把预测结果与test数据的真实临床表型数据结合起来
-```{r}
-clindata_plusRF=cbind(clindata,RF_predictions_responses,RF_predictions_votes)
-clindata_plusRF=clindata_plusRF[which(!is.na(clindata_plusRF[,"event.rfs"])),]
 
+```{r}
+
+head(testing_clinical)
+clindata=testing_clinical[,c('event.rfs','time.rfs')]
+clindata_plusRF=cbind(clindata,RF_predictions_responses,RF_predictions_votes)
+dim(clindata_plusRF)
+clindata_plusRF=clindata_plusRF[! is.na(clindata_plusRF$event.rfs)  ,]
+dim(clindata_plusRF)
+head(clindata_plusRF)
+
+save(clindata_plusRF,file='predictor_output.Rdata')
 ```
 
-### 
+### 简单模型诊断，可以计算 sensitivity, specificity, accuracy 等等
 
 ```{r}
 confusion=table(clindata_plusRF[,c("event.rfs","RF_predictions_responses")])
 rownames(confusion)=c("NoRelapse","Relapse")
+confusion
+
 sensitivity=(confusion[2,2]/(confusion[2,2]+confusion[2,1]))*100
+sensitivity
 specificity=(confusion[1,1]/(confusion[1,1]+confusion[1,2]))*100
+specificity
 overall_error=((confusion[1,2]+confusion[2,1])/sum(confusion))*100
+overall_error
 overall_accuracy=((confusion[1,1]+confusion[2,2])/sum(confusion))*100
+overall_accuracy
 class1_error=confusion[1,2]/(confusion[1,1]+confusion[1,2])
+class1_error
 class2_error=confusion[2,1]/(confusion[2,2]+confusion[2,1])
+class2_error
 ```
 
 ### ROC curve and calculate the area under it (AUC)
+
 ```{r}
 # Create variables for the known target class and predicted class probabilities.
 target=clindata_plusRF[,"event.rfs"]
