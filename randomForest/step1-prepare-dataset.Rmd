@@ -95,8 +95,9 @@ GSE2034_exprSet=exprSet
 GSE2034_metadata=pData(GSE2034[[1]])
  
 training_data=GSE2034_exprSet
+dim(training_data)
 training_clinical=GSE2034_metadata[,c("title","geo_accession","characteristics_ch1")]
-#head(training_clinical)
+head(training_clinical)
 dim(training_clinical)
 
 exprSet=exprs(GSE2990[[1]])
@@ -120,8 +121,10 @@ dim(testing_data)
 # testing_clinical=GSE2990_metadata 
 # 本来准备用GEO包下载的临床信息，但是好像有缺失，所以用了作者整理的临床数据
 
-testing_clinical=read.table('ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE2nnn/GSE2990/suppl/GSE2990_suppl_info.txt',
-                            header = T,stringsAsFactors = F,sep = '\t')
+file='ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE2nnn/GSE2990/suppl/GSE2990_suppl_info.txt' 
+## 我已经把文件下载下来了，所以可以用下面的代码
+file='GSE2990_suppl_info.txt'
+testing_clinical=read.table(file,header = T,stringsAsFactors = F,sep = '\t')
 tail(testing_clinical)
 
 

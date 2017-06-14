@@ -5,35 +5,67 @@
  * [捐赠我](http://www.bio-info-trainee.com/donate)
 
 
-## 背景介绍
+# 背景介绍
 
-## 准备训练数据和测试数据集
+# 准备训练数据和测试数据集
 
-> 这里，我们从GEO数据库里面下载两个不同研究的表达芯片数据
+这里，我们从GEO数据库里面下载两个不同研究的表达芯片数据
 
-### [training data set ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=gse2034)
+## [training data set:GSE2034 ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=gse2034)
 
 > GSE2034已经是2005年的数据了，不过资料整理的比较其实，共有180 lymph-node negative relapse free patients 和 106 lymph-node negate patients that developed a distant metastasis.
 
-### [test  data set ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE2990)
+## [test  data set:GSE2990 ](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE2990)
 
-> GSE2990是2006年的数据，数据包括:
-
-64 microarray experiments from primary breast tumors used as training set to identify genes differentially expressed in grade 1 and 3.
-
-129 microarray experiments from primary breast tumors of untreated patients used as validation set to validate the list of genes and its correlation with survival.
+> GSE2990是2006年的数据，数据包括:64 microarray experiments from primary breast tumors used as training set to identify genes differentially expressed in grade 1 and 3.还有129 microarray experiments from primary breast tumors of untreated patients used as validation set to validate the list of genes and its correlation with survival.
 
 它们使用的是同一个芯片平台：Affymetrix U133A platform ([GPL96](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL96)).
 
-下载GEO数据库的芯片数据并且处理成表达矩阵是非常简单的，代码见：
+下载GEO数据库的芯片数据并且处理成表达矩阵是非常简单的，处理方式及代码见:[R语言实现随机森林(1)Prepare-dataset](http://www.biotrainee.com/jmzeng/ML/randomForest/step1-prepare-dataset.html)
 
-接下来
+最后得到：
+
+**training_data** 是12437个基因在286个样本的表达矩阵
+**testing_data** 是12437个基因在189个样本的表达矩阵
+**training_clinical** 是训练数据集的286个样本的临床信息
+**testing_clinical** 是测试数据集的189个样本的临床信息
+这些数据在后面构建随机森林模型就会用得着啦
 
 ## 用训练数据构建随机森林分类器
 
+> 随机森林算法只需要两个输入文件：
+
+* 多个变量在多个样本的数据矩阵
+* 每个样本的结果 
+
+在我们的例子里面,需要把**training_data** 是12437个基因在286个样本的表达矩阵进行过滤，不是所有的基因都有资格进入随机森林模型里面，还有这286个样本是否发生了癌症复发的情况。
+
+根据这两个input建立模型的步骤见：[R语言实现随机森林(2)Construct model](http://www.biotrainee.com/jmzeng/ML/randomForest/step2-model-construction.html)
+
+建立好模型了，可以进行简单的统计，看看模型效果如何。
+接下来就可以利用建立好的模型对新的样本的多个变量的值来预测新样本的结果了。
+
 ## 在测试数据上使用构建好的随机森林分类器
+> 测试数据也是表达矩阵，在我们的例子里面是**testing_data** 是12437个基因在189个样本的表达矩阵！
+
+用模型进行预测只需要一句代码即可，就可以给出每个样本的癌症复发与否的预测结果，同时也会给出复发与否的预测概率。
+也可以对预测结果进行一些统计分析，预测效果检验。当然，我们没有这189个样本的癌症复发情况的信息，所以不可能得到真实的预测准确性。
+
+具体代码见：[R语言实现随机森林(3)Test the model](http://www.biotrainee.com/jmzeng/ML/randomForest/step3-model-testing.html)
 
 ## 用生存分析来查看分类效果
+> 虽然我们没有那189个样本的癌症复发情况的信息，所以不可能得到真实的预测准确性。但是我们可以根据预测值把样本分成3组，然后根据不同的分组来做生存分析，因为癌症复发高风险病人的生存情况应该是会很糟糕，如果生存分析结果也是如此，那么就说明我们的预测效果还不错。
+具体代码见：[R语言实现随机森林(4)Justice the model](http://www.biotrainee.com/jmzeng/ML/randomForest/step4-model-justice-KM.html)
 
 ## 结语
+
+在R里面实现随机森林是非常简单的，只需要制作好用于随机森林模型构建的所有样本的所有变量矩阵以及样本的结果即可。
+一句话就建立好模型了
+```R
+rf_output=randomForest(x=predictor_data, y=target, importance = TRUE, ntree = 10001, proximity=TRUE, sampsize=sampsizes)
+```
+关键在于理解这个算法，可是我讲不出来，抛开算法不谈，还需要理解这个模型的输出。
+
+这就是为什么本文拿了两个实际的芯片表达数据来做例子。
+
 

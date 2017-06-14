@@ -217,9 +217,18 @@ GSE2034_exprSet=exprSet
 GSE2034_metadata=pData(GSE2034[[1]])
  
 training_data=GSE2034_exprSet
-training_clinical=GSE2034_metadata[,c(&quot;title&quot;,&quot;geo_accession&quot;,&quot;characteristics_ch1&quot;)]
-#head(training_clinical)
-dim(training_clinical)</code></pre>
+dim(training_data)</code></pre>
+<pre><code>## [1] 12437   286</code></pre>
+<pre class="r"><code>training_clinical=GSE2034_metadata[,c(&quot;title&quot;,&quot;geo_accession&quot;,&quot;characteristics_ch1&quot;)]
+head(training_clinical)</code></pre>
+<pre><code>##                      title geo_accession            characteristics_ch1
+## GSM36777   Wang4812_JA_277      GSM36777 bone relapses (1=yes, 0=no): 0
+## GSM36778   Wang4813_JA_278      GSM36778 bone relapses (1=yes, 0=no): 0
+## GSM36779  Wang4630_JA798@C      GSM36779 bone relapses (1=yes, 0=no): 0
+## GSM36780 Wang4889_JA_846@2      GSM36780 bone relapses (1=yes, 0=no): 0
+## GSM36781 Wang4857_JA_765@2      GSM36781 bone relapses (1=yes, 0=no): 0
+## GSM36782    Wang4585_JA600      GSM36782 bone relapses (1=yes, 0=no): 0</code></pre>
+<pre class="r"><code>dim(training_clinical)</code></pre>
 <pre><code>## [1] 286   3</code></pre>
 <pre class="r"><code>exprSet=exprs(GSE2990[[1]])
 keep_probe=rownames(exprSet) %in% probe2symbol$probe_id
@@ -248,8 +257,10 @@ dim(testing_data)</code></pre>
 <pre class="r"><code># testing_clinical=GSE2990_metadata 
 # 本来准备用GEO包下载的临床信息，但是好像有缺失，所以用了作者整理的临床数据
 
-testing_clinical=read.table('ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE2nnn/GSE2990/suppl/GSE2990_suppl_info.txt',
-                            header = T,stringsAsFactors = F,sep = '\t')
+file='ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE2nnn/GSE2990/suppl/GSE2990_suppl_info.txt' 
+## 我已经把文件下载下来了，所以可以用下面的代码
+file='GSE2990_suppl_info.txt'
+testing_clinical=read.table(file,header = T,stringsAsFactors = F,sep = '\t')
 tail(testing_clinical)</code></pre>
 <pre><code>##     geo_accn sample_name treatment dataset grade node size age er
 ## 184 GSM65875   OXFU_1248      none   KJ125     1    0  2.0  70  1

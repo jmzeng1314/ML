@@ -1,9 +1,14 @@
 ---
-title: "Justice the model"
+title: "R语言实现随机森林(4)Justice the model"
 author: "jmzeng@163.com"
 date: "6/12/2017"
 output: html_document
 ---
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
 
 ## 首先加载包，并且加载上一步骤的数据
 ```{r,warning=FALSE,message=FALSE}
@@ -77,5 +82,10 @@ legend_text=c(paste(groups_custom, " ", "(", group_sizes_custom, ")", sep=""),pa
 legend(x = "bottomleft", legend = legend_text, col = c(colors_custom,"white"), lty = "solid", bty="n", cex=1.2)
 ```
 
-看起来还蛮显著的！
+虽然我们没有那189个样本的癌症复发情况的信息，所以不可能得到真实的预测准确性。
+
+但是我们可以根据预测值把样本分成3组，然后根据不同的分组来做生存分析，因为癌症复发高风险病人的生存情况应该是会很糟糕！
+
+而我们的生存分析结果也是如此，那么就说明我们的预测效果还不错。
+
 
