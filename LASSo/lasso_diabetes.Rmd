@@ -1,0 +1,252 @@
+---
+title: "对连续性变量进行LASSO回归"
+author: "jmzeng@163.com"
+date: "6/19/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+##　安装并加载必须的packages
+> 如果你还没有安装，就运行下面的代码安装：
+```{r,eval=FALSE}
+install.packages('lars')
+install.packages('glmnet')
+```
+
+> 如果你安装好了，就直接加载它们即可
+```{r,warning=FALSE,message=FALSE}
+library(lars)
+# https://cran.r-project.org/web/packages/lars/lars.pdf
+library(glmnet)
+data(diabetes)
+```
+
+## 首先查看测试数据的基本信息
+
+> 这是一个糖尿病相关的数据集，包含两个x矩阵和一个y结果向量，分别是：
+
+* x a matrix with 10 columns (自变量)
+* y a numeric vector (因变量)
+* x2 a matrix with 64 columns
+
+```{r,warning=FALSE,message=FALSE}
+attach(diabetes)
+summary(x)
+summary(y)
+boxplot(y)
+#summary(x2)
+```
+
+其中x矩阵含有10个变量，分别是："age" "sex" "bmi" "map" "tc"  "ldl" "hdl" "tch" "ltg" "glu" 它们都在一定程度上或多或少的会影响个体糖尿病状态。
+
+数据的详细介绍见 [Efron, Hastie, Johnstone and Tibshirani (2003) "Least Angle Regression" (with discussion) Annals
+of Statistics;](http://web.stanford.edu/~hastie/Papers/LARS/LeastAngle_2002)
+
+## 先看看因变量和每一个自变量的关系
+
+```{r,warning=FALSE,message=FALSE}
+oldpar=par()
+par(mfrow=c(2,5))
+for(i in 1:10){
+  plot(x[,i], y)
+  abline(lm(y~x[,i]))
+}
+par(oldpar)
+```
+
+## 再对数据进行简单的线性回归
+
+```{r}
+model_ols <- lm(y ~ x)
+summary(model_ols)
+```
+
+可以看到,如果用普通的线性回归分析,有4个变量(bmi,sex,map,ltg),还有截距都显著影响着糖尿病.
+
+## 接下来进行LASSO回归
+
+> 很简单，一个命令即可。目前最好用的拟合广义线性模型的R package是glmnet，由LASSO回归的发明人，斯坦福统计学家Trevor Hastie领衔开发。它的特点是对一系列不同λ值进行拟合，每次拟合都用到上一个λ值拟合的结果，从而大大提高了运算效率。
+
+```{r}
+model_lasso <- glmnet(x, y, family="gaussian", nlambda=50, alpha=1)
+```
+
+参数family规定了回归模型的类型:
+
+* family="gaussian" 适用于一维连续因变量(univariate)
+* family="mgaussian" 适用于多维连续因变量(multivariate)
+* family="poisson" 适用于非负次数因变量(count)
+* family="binomial" 适用于二元离散因变量(binary)
+* family="multinomial" 适用于多元离散因变量(category)
+
+参数nlambda=50让算法自动挑选50个不同的λ值，拟合出50个系数不同的模型。
+
+参数alpha=1输入α值，1是它的默认值。参数α来控制应对高相关性(highly correlated)数据时模型的性状.
+
+## LASSO回归的结果解析
+
+```{r}
+print(model_lasso)
+```
+
+每一行代表了一个模型。
+
+> 列Df是自由度，代表了非零的线性模型拟合系数的个数。
+
+列%Dev代表了由模型解释的残差的比例，对于线性模型来说就是模型拟合的R^2(R-squred)。它在0和1之间，越接近1说明模型的表现越好，如果是0，说明模型的预测结果还不如直接把因变量的均值作为预测值来的有效。
+
+> 列Lambda当然就是每个模型对应的λ值。
+
+我们可以看到，随着λ的变小，越来越多的自变量被模型接纳进来，%Dev也越来越大。
+
+第29行时，模型包含了所有20个自变量，%Dev也在0.5以上。
+
+其实我们本应该得到50个不同的模型，但是连续几个%Dev变化很小时glmnet()会自动停止。
+
+分析模型输出我们可以看到当Df大于9的时候，%Dev就达到了0.5，而且继续缩小λ，即增加更多的自变量到模型中，也不能显著提高%Dev。
+
+所以我们可以认为当λ接近0.23时，得到的包含10个自变量的模型，已经是最好的描述这组数据的模型了。
+
+
+> 我们也可以通过指定λ值，抓取出某一个模型的系数:
+
+```{r}
+coef(model_lasso, s=c(model_lasso$lambda[29],0.23))
+```
+
+
+## 作图观察LASSO回归模型的系数是如何变化的
+
+```{r}
+plot.glmnet(model_lasso, xvar = "norm", label = TRUE)
+plot(model_lasso, xvar="lambda", label=TRUE)
+```
+
+图中的每一条曲线代表了每一个自变量系数的变化轨迹，纵坐标是系数的值，下横坐标是loga(λ)，上横坐标是此时模型中非零系数的个数。我们可以看到，黑线代表的自变量1在λ值很大时就有非零的系数，然后随着λ值变小不断变大。我们还可以尝试用xvar=“norm”和xvar=“dev”切换下横坐标。
+
+
+## 用自带**glmnet()**函数模型进行预测
+
+```{r}
+pre <- predict(model_lasso, newx=x , s=c(model_lasso$lambda[29],0.23))
+head(cbind(y,pre))
+```
+
+
+
+## 用交叉验证来确定最优lambda值
+
+> 公式中的lambda是重要的设置参数，它控制了惩罚的严厉程度，如果设置得过大，那么最后的模型参数均将趋于0，形成拟合不足。如果设置得过小，又会形成拟合过度。所以lambda的取值一般需要通过交叉检验来确定。这时候需要用**lars**包的**glmnet()**函数啦！
+
+```{r}
+cv_fit <- cv.glmnet(x=x, y=y, alpha = 1, nlambda = 1000)
+```
+
+参数nlambda=1000让算法自动挑选1000个不同的λ值，拟合出1000个系数不同的模型。
+
+其实**cv.glmnet()**函数的参数值得注意的还有两个，其中type.measure是用来指定交叉验证选取模型时希望最小化的目标参量。
+
+还可以用nfolds指定fold数，或者用foldid指定每个fold的内容。
+
+## 可视化交叉验证结果 
+
+```{r}
+plot.cv.glmnet(cv_fit)
+```
+
+因为交叉验证，对于每一个λ值，在红点所示目标参量的均值左右，我们可以得到一个目标参量的置信区间。两条虚线分别指示了两个特殊的λ值:
+```{r}
+c(cv_fit$lambda.min,cv_fit$lambda.1se)
+```
+
+lambda.min是指在所有的λ值中，得到最小目标参量均值的那一个。
+
+而lambda.1se是指在lambda.min一个方差范围内得到最简单模型的那一个λ值。
+
+因为λ值到达一定大小之后，继续增加模型自变量个数即缩小λ值，并不能很显著的提高模型性能，lambda.1se给出的就是一个具备优良性能但是自变量个数最少的模型。
+
+## 用**cv.glmnet()**函数模型进行预测
+
+```{r}
+pre <-  predict(cv_fit, newx=x[1:5,], type="response", s="lambda.1se") 
+head(cbind(y,pre))
+```
+
+
+## 提取模型的系数
+
+```{r}
+
+cv_fit$lambda.min
+fit <- glmnet(x=x, y=y, alpha = 1, lambda=cv_fit$lambda.min)
+fit$beta
+coef(cv_fit$glmnet.fit, s =  min(cv_fit$lambda))
+
+cv_fit$lambda.1se
+fit <- glmnet(x=x, y=y, alpha = 1, lambda=cv_fit$lambda.1se)
+fit$beta
+coef(cv_fit$glmnet.fit, s = cv_fit$lambda.1se)
+```
+
+
+因为每个fold间的计算是独立的。
+我们还可以考虑运用并行计算来提高运算效率，使用parallel=TRUE可以开启这个功能。但是我们需要先装载package doParallel。
+
+## 可以用并行加快计算速度
+
+> 并行的示例代码是：
+
+```{r,eval=FALSE}
+library(doParallel)
+# Windows System
+cl <- makeCluster(6)
+registerDoParallel(cl)
+cvfit = cv.glmnet(x, y, family = "binomial", type.measure = "class", parallel=TRUE)
+stopCluster(cl)
+# Linux System
+registerDoParallel(cores=8)
+cvfit = cv.glmnet(x, y, family = "binomial", type.measure = "class", parallel=TRUE)
+stopImplicitCluster()
+```
+
+
+## 用model.matrix函数把自变量的离散变量变成矩阵输入
+
+> LASSO回归的特点是在拟合广义线性模型的同时进行变量筛选(Variable Selection)和复杂度调整(Regularization)。因此，不论目标因变量(dependent/response varaible)是连续的(continuous)，还是二元或者多元离散的(discrete)， 都可以用LASSO回归建模然后预测。
+
+> 但是，glmnet只能接受数值矩阵作为模型输入，如果自变量中有离散变量的话，需要把这一列离散变量转化为几列只含有0和1的向量，这个过程叫做One Hot Encoding。
+
+下面是一个例子
+
+```{r}
+df=data.frame(Factor=factor(1:5), Character=c("a","a","b","b","c"),
+              Logical=c(T,F,T,T,T), Numeric=c(2.1,2.3,2.5,4.1,1.1))
+model.matrix(~., df)
+```
+
+除此之外，如果我们想让模型的变量系数都在同一个数量级上，就需要在拟合前对数据的每一列进行标准化(standardize)，即对每个列元素减去这一列的均值然后除以这一列的标准差。这一过程可以通过在glmnet()函数中添加参数standardize=TRUE来实现。
+
+## 模型其它技巧
+
+### 指定模型系数的上限与下限
+
+> 使用upper.limits和lower.limits,上限与下限可以是一个值，也可以是一个向量，向量的每一个值作为对应自变量的参数上下限。
+
+### 调整惩罚参数
+> 有时，在建模之前我们就想凸显某几个自变量的作用，此时我们可以调整惩罚参数,即设置penalty.factor。每个自变量的默认惩罚参数是1，把其中的某几个量设为0将使得相应的自变量不遭受任何惩罚
+
+
+
+
+
+
+
+
+

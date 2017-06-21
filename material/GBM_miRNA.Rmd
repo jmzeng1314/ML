@@ -1,0 +1,113 @@
+---
+title: "GBM_miRNA芯片表达数据整理"
+author: "jmzeng@163.com"
+date: "6/21/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+
+## 首先下载miRNA表达芯片数据(TCGA的GBM)
+
+首先要了解疾病背景，Diffuse gliomas can be categorized according to grade; low grade (grade II), anaplastic (grade III), and glioblastoma (GBM, grade IV). 所以grade II/III 在TCGA里面的简称是LGG，而grade IV就算GBM咯
+
+你也许需要了解一下[基本miRNA知识](http://www.cs.cmu.edu/~sssykim/teaching/s13/slides/Lecture_cancer_miRNA.pdf)
+
+首先下载TCGA的GBM的miRNA相关数据，我比较喜欢firehose网站及客户端，见[教程](http://www.biotrainee.com/thread-822-1-2.html)
+重要的就是这个url:[http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/](http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/)
+在里面找到GBM.Merge_mirna__h_mirna_8x15k__unc_edu__Level_3这个miRNA表达量的文件，是475个GBM的Level 2 Agilent microRNA 8*15k microarray数据下载下来了。 本来是1510个探针，对应着534个miRNAs。这里直接下载的基于miRNA的表达数据。
+
+临床数据就用 Clinical_Pick_Tier1.Level_4， 这个是整理好的，就13个我们常用的临床资料。
+
+这两个文件下载链接是：
+
+* [http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/gdac.broadinstitute.org_GBM.Clinical_Pick_Tier1.Level_4.2016012800.0.0.tar.gz](http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/gdac.broadinstitute.org_GBM.Clinical_Pick_Tier1.Level_4.2016012800.0.0.tar.gz)
+* [http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/gdac.broadinstitute.org_GBM.Merge_mirna__h_mirna_8x15k__unc_edu__Level_3__unc_DWD_Batch_adjusted__data.Level_3.2016012800.0.0.tar.gz](http://gdac.broadinstitute.org/runs/stddata__2016_01_28/data/GBM/20160128/gdac.broadinstitute.org_GBM.Merge_mirna__h_mirna_8x15k__unc_edu__Level_3__unc_DWD_Batch_adjusted__data.Level_3.2016012800.0.0.tar.gz)
+
+请仔细体会这些url的规则，下载的压缩包解压就可以看到下面的文件了。别老问些TCGA数据如何下载的傻问题。
+
+
+## 数据格式化
+
+就是读取miRNA表达矩阵，还有跟临床资料对应起来。需要读取的文件就是从firehose网站下载的。
+
+```{r,eval=FALSE}
+
+GBM_miRNA=read.table('GBM_miRNA_array.txt',stringsAsFactors = F,sep=  '\t',header = T)
+GBM_miRNA=GBM_miRNA[-1,]
+rownames(GBM_miRNA)=GBM_miRNA[,1]
+GBM_miRNA=GBM_miRNA[,-1]
+
+#Now I need to identify normal and tumor samples. this is done using the TCGA barcode (https://wiki.nci.nih.gov/display/TCGA/TCGA+barcode). The two digits at position 14-15 of the barcode will indicate teh sample type, from the link:
+#  "Tumor types range from 01 - 09, normal types from 10 - 19 and control samples from 20 - 29."
+samples=colnames(GBM_miRNA)
+table(substr(samples,14,14))
+
+GBM_miRNA=GBM_miRNA[,substr(samples,14,14)==0]      
+samples=colnames(GBM_miRNA)
+table(substr(samples,14,14))
+
+samples=tolower(substr(samples,1,12))
+
+GBM_clinical=read.table('GBM.clin.merged.picked.txt',stringsAsFactors = F,sep=  '\t',header = T)
+rownames(GBM_clinical)=GBM_clinical[,1]
+GBM_clinical=GBM_clinical[,-1]
+GBM_clinical=GBM_clinical[-1,]
+
+
+GBM_miRNA=GBM_miRNA[, samples %in% colnames(GBM_clinical)] 
+samples=samples[samples %in% colnames(GBM_clinical)]
+colnames(GBM_miRNA)=samples
+
+GBM_clinical=GBM_clinical[,match(samples , colnames(GBM_clinical))]
+GBM_clinical=t(GBM_clinical)
+head(GBM_clinical)
+GBM_clinical=as.data.frame(GBM_clinical)
+t1=as.numeric(GBM_clinical$days_to_death)
+t1[is.na(t1)]=0
+t2=as.numeric(GBM_clinical$days_to_last_followup)
+t2[is.na(t2)]=0
+
+
+GBM_clinical <- data.frame(years_to_birth=as.numeric(GBM_clinical$years_to_birth),
+           vital_status=as.numeric(as.character(GBM_clinical$vital_status)),
+           karnofsky_performance_score=as.numeric(GBM_clinical$karnofsky_performance_score),
+           gender=as.character(GBM_clinical$gender),
+           #histological_type=as.character(GBM_clinical$histological_type),
+           radiation_therapy=as.character(GBM_clinical$radiation_therapy),
+           time=t1+t2
+           )
+rownames(GBM_clinical)=samples
+save(GBM_clinical,GBM_miRNA,file='GBM_miRNA.Rdata')
+```
+
+
+## 数据简单介绍
+
+当然要看看我们的数据整理成了什么样子咯~
+
+```{r}
+load( file='GBM_miRNA.Rdata')
+head(GBM_clinical) 
+summary(GBM_clinical)
+GBM_miRNA[1:4,1:4]
+dim(GBM_miRNA)
+
+```
+
+可以看到是563个GBM样本的miRNA芯片数据，共测了534个miRNA基因的表达量。
+
+临床数据我主要整理了性别，生存状态，还有生存时间，所以这个数据主要可以用来做生存分析。
+
+然后因为有表达矩阵，所以可以做主成分分析，有生存状态可以做大部分机器学习分析。
+
+
+

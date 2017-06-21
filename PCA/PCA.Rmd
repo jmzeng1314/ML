@@ -1,0 +1,130 @@
+---
+title: "一个TCGA数据处理实例"
+author: "jmzeng1314@163.com"
+date: "June 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+> 如果缺少包，按照下面代码先安装哈：
+
+```{r,eval=F}
+library(devtools)
+install_github("ggbiplot", "vqv")
+install.packages('ggfortify')
+install.packages('gmodels')
+```
+
+
+## 数据简单介绍
+
+```{r}
+load( file='GBM_miRNA.Rdata')
+head(GBM_clinical) 
+summary(GBM_clinical)
+GBM_miRNA[1:4,1:4]
+dim(GBM_miRNA)
+
+```
+
+## 主成分分析(PCA)
+
+> 主成分分析（Principal Component Analysis，PCA），是一种统计方法。
+通过正交变换将一组可能存在相关性的变量转换为一组线性不相关的变量，转换后的这组变量叫主成分。
+
+534个miRNA基因的表达量，指标太多了，就可以采用主成分分析的方法进行降维。因为那些miRNA的表达之间会有这样那样的联系，相互之间会有影响，通过主成分分析后，得到有限的几个主成分就可以代表它们所有啦。
+
+基础的可以使用princomp()函数来做主成分分析，这里我们采用gmodels包的fast.prcomp函数！
+
+```{r}
+library(gmodels)
+dat=apply(GBM_miRNA, 1,as.numeric)
+pca=fast.prcomp(dat)
+
+## 旋转矩阵的每一列包含主成分负载向量。
+pca$rotation[1:4,1:4]
+
+## 主成分评价向量
+pca$x[1:4,1:4]
+
+## 计算每个主成分的标准偏差/方差
+std_dev <- pca$sdev
+pr_var <- std_dev^2
+pr_var[1:10]
+# 我们的目标是寻找能够说明最大方差的成分，这是因为，我们想在使用这些成分时尽可能多地保留信息。因此，如果用来说明的方差越大，那么这些成分包含的信息也就越多。
+
+#被解释的方差的占比
+prop_varex <- pr_var/sum(pr_var)
+prop_varex[1:10]
+
+## 可视化判断多少个主成分可以代替原来的534个miRNA基因
+#碎石图
+plot(prop_varex, xlab = "Principal Component",
+             ylab = "Proportion of Variance Explained",
+             type = "b",xlim=c(0,100))
+#cumulative scree plot
+plot(cumsum(prop_varex), xlab = "Principal Component",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b",xlim=c(0,100))
+
+summary(pca)$importance[,1:4]
+
+```
+
+> 由上面两个图片可以看到，40个主成分之后的主成分可以解释的方差几乎为0 了，而且前面的40个合起来可以解释超过80%的方差啦。
+这样我们就把534个miRNA变量降维到了40个方差。
+
+## 看看前两个主成分能不能区分生存
+
+```{r}
+dat.pca=pca
+library(ggbiplot)
+g <- ggbiplot(dat.pca, obs.scale = 1  ,var.scale = 1, var.axes=F,
+              groups =  as.factor(GBM_clinical$vital_status), ellipse = TRUE, 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+额，貌似效果有一点尴尬呀！
+
+也许GBM癌症病人的生存状态不能简单的由miRNA表达量决定吧，或者PCA是没办法直接得到关键的miRNA的。
+
+## 运用主成分模型进行预测
+
+下面的代码我其实还没有看懂，先不讲这个哈！
+
+```{r,eval=F}
+#加上带主成分的训练集
+train.data <- data.frame(Item_Outlet_Sales = train$Item_Outlet_Sales, prin_comp$x)
+#we are interested in first 30 PCAs
+#我们对前30个主成分感兴趣
+train.data <- train.data[,1:31]
+#运行决策树
+
+library(rpart)
+rpart.model <- rpart(Item_Outlet_Sales ~ .,data = train.data, method = "anova")
+rpart.model
+#把测试转换成主成分分析
+test.data <- predict(prin_comp, newdata = pca.test)
+test.data <- as.data.frame(test.data)
+#选择前30个成分
+test.data <- test.data[,1:30]
+#在测试数据上做出预测
+rpart.prediction <- predict(rpart.model, test.data)
+```
+
+
+
+
+
