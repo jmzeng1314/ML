@@ -1,0 +1,3 @@
+load("/Users/jimmy/Dropbox/Rpackage/ML/randomForest/ML_RF_input.Rdata")
+dim(training_data)
+dim(testing_data)

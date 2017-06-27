@@ -1,0 +1,141 @@
+---
+title: "对TCGA的GBM的miRNA表达芯片做生存分析"
+author: "jmzeng1314@163.com"
+date: "June 26, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> * [我的博客](http://www.bio-info-trainee.com/)
+ * [我们的论坛](http://www.biotrainee.com/forum.php)
+ * [捐赠我](http://www.bio-info-trainee.com/donate)
+
+> 如果缺少包，按照下面代码先安装哈：
+
+```{r,eval=F} 
+install.packages('survival')
+install.packages('rms')
+# rms::survplot() used to allow plotting a survfit object through survplot.survfit() function.
+library(rms)
+library(survival)
+```
+
+
+## 数据简单介绍
+
+```{r}
+load( file='GBM_miRNA.Rdata')
+head(GBM_clinical) 
+summary(GBM_clinical)
+GBM_miRNA[1:4,1:4]
+dim(GBM_miRNA)
+library(survival)
+```
+
+可以看到是563个GBM样本的534个miRNA的表达量矩阵，而且有着563个样本的临床信息，包括年龄、生存状态、性别、是否放疗、生存时间等等
+
+## 批量做KM生存分析
+
+```{r} 
+library(survival)
+os=GBM_clinical$time                 ##（时间）
+STATUS=GBM_clinical$vital_status     ###（生存的event）
+log_rank_p <- apply(GBM_miRNA,  1, function(values1){  
+  ## 表达矩阵的每一行miRNA进行循环生存分析统计。
+  group=ifelse(values1>median(values1),'high','low')  
+  ##分高低组
+  survival_dat <- data.frame(group=group,os=os,STATUS=STATUS,stringsAsFactors = F)  
+  ##行，列的生存时间， 即 基因表达值分成了高低组，和相应
+  ###表格可以任意添加参数，如性别，年龄等。
+  my.surv <- Surv(survival_dat$os,survival_dat$STATUS)  
+  ###my.surv <- Surv(OS_MONTHS,OS_STATUS=='LIVING') 
+  ##这个Surv函数第一个参数必须是数值型的时间，第二个参数是逻辑向量，1,0表示死亡与否
+  kmfit2 <- survfit(my.surv~survival_dat$group)  
+  ##### 生存数据对象~表达高低 创建KM生存曲线 
+  data.survdiff=survdiff(my.surv~group,data = survival_dat) 
+  ##用于不同组的统计检验 Two-sample test  
+  # survdiff(Surv(futime, fustat) ~ rx,data=ovarian)
+  #生存数据对象~表达高低
+  p.val = 1 - pchisq(data.survdiff$chisq, length(data.survdiff$n) - 1)
+})
+names(log_rank_p[log_rank_p<0.05])
+## 得到在生存分析里面具有统计学显著的miRNA
+```
+
+## 批量做cox生存分析
+
+```{r}
+library(survival)
+os=GBM_clinical$time                 ##（时间）
+STATUS=GBM_clinical$vital_status     ###（生存的event）
+gender=GBM_clinical$gender  
+age=GBM_clinical$years_to_birth 
+## gender and age are similar with group(by gene expression)
+ 
+cox_results <- apply(GBM_miRNA , 1, function(values1){
+  group=ifelse(values1>median(values1),'high','low')
+  survival_dat <- data.frame(group=group,gender=gender,os=os,STATUS=STATUS,age=age,stringsAsFactors = F)
+  my.surv <- Surv(survival_dat$os,survival_dat$STATUS)  
+  m=coxph(my.surv ~ age + gender + group, data =  survival_dat)
+   
+  beta <- coef(m)
+  se <- sqrt(diag(vcov(m)))
+  HR <- exp(beta)
+  HRse <- HR * se
+   
+  #summary(m)
+  tmp <- round(cbind(coef = beta, se = se, z = beta/se, p = 1 - pchisq((beta/se)^2, 1),
+                     HR = HR, HRse = HRse,
+                     HRz = (HR - 1) / HRse, HRp = 1 - pchisq(((HR - 1)/HRse)^2, 1),
+                     HRCILL = exp(beta - qnorm(.975, 0, 1) * se),
+                     HRCIUL = exp(beta + qnorm(.975, 0, 1) * se)), 3)
+  return(tmp['grouplow',])
+   
+})
+cox_results[,cox_results[4,]<0.05]
+```
+
+## 对其中一个miRNA基因做生存分析
+```{r,warning=FALSE,message=FALSE}
+library(rms)
+```
+
+```{r,warning=F}
+tmp=intersect(names(log_rank_p[log_rank_p<0.05]),colnames(cox_results[,cox_results[4,]<0.05]))
+tmp
+choose_miRNA=tmp[1]
+library(survival)
+
+os=GBM_clinical$time                 
+STATUS=GBM_clinical$vital_status      
+gender=GBM_clinical$gender  
+age=GBM_clinical$years_to_birth 
+values1=as.numeric(GBM_miRNA[choose_miRNA,])
+group=ifelse(values1>median(values1),'high','low')
+
+survival_dat <- data.frame(group=group,gender=gender,os=os,STATUS=STATUS,age=age,stringsAsFactors = F)
+my.surv <- Surv(survival_dat$os,survival_dat$STATUS)  
+
+kmfit2 <- survfit(my.surv~survival_dat$group)  
+m=coxph(my.surv ~ age + gender + group, data =  survival_dat)
+   
+plot(kmfit2,col=c('blue','red'))
+legend('bottomleft', c('high','low'), col=c('blue','red'), lty = 1)
+
+#library(rms)
+objNpsurv <- npsurv(my.surv~group,data=survival_dat)
+class(objNpsurv)
+survplot(objNpsurv)
+
+```
+
+可视化不是我的强项，就随便找了个包出图，貌似也不美观！
+
+
+
+
+
+

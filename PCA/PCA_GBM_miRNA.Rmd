@@ -1,5 +1,5 @@
 ---
-title: "一个TCGA数据处理实例"
+title: "对TCGA的GBM_miRNA芯片表达数据做PCA分析"
 author: "jmzeng1314@163.com"
 date: "June 20, 2017"
 output: html_document
